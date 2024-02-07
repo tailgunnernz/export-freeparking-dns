@@ -1,0 +1,19 @@
+{
+  "name": "Export Freeparking DNS",
+  "description": "Easily export DNS records from Freeparking in a format ready to import to GoDaddy",
+  "version": "0.1.0",
+  "manifest_version": 3,
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://manage.freeparking.co.nz/members/domains/details/*"],
+      "run_at": "document_end",
+      "js": ["/scripts/export.js"]
+    }
+  ]
+}
