@@ -1,16 +1,37 @@
-const table = document.querySelector('#dns_records_block');
-// return early if no table
-if (!table) return;
+window.fpLoaded = 0;
+waitForElement('#dns_records_block', createButton);
 
-// setup button with id downloadDnsRecords
-const button = document.createElement('button');
-button.id = 'downloadDnsRecords';
-button.innerHTML = 'Download DNS Records';
-button.classList.add('memberBtnGreen');
-button.onclick = downloadTableAsCsv;
+// function to wait till the table is loaded
+function waitForElement(selector, callback) {
+  if (window.fpLoaded > 10) {
+    console.log('timeout');
+    return;
+  }
+  window.fpLoaded++;
 
-// add button after first child of table
-table.insertBefore(button, table.firstChild);
+  const table = document.querySelector(selector);
+  if (table) {
+    console.log('table loaded');
+    callback(table);
+  } else {
+    console.log('table not loaded');
+    setTimeout(() => {
+      waitForElement(selector, callback);
+    }, 100);
+  }
+}
+
+function createButton(table) {
+  // setup button with id downloadDnsRecords
+  const button = document.createElement('button');
+  button.id = 'downloadDnsRecords';
+  button.innerHTML = 'Download DNS Records';
+  button.classList.add('memberBtnGreen');
+  button.onclick = downloadTableAsCsv;
+
+  // add button after first child of table
+  table.insertBefore(button, table.firstChild);
+}
 
 // function to download the table as csv
 function downloadTableAsCsv() {
