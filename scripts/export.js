@@ -75,7 +75,7 @@ function downloadTableAsCsv() {
           : `   ${value.textContent.trim()}`
     })
 
-    if (type === 'CNAME' || type === 'MX') {
+    if (type === 'CNAME' || type === 'MX' || type === 'SRV') {
       address += '.'
     }
 
