@@ -148,7 +148,9 @@
           trimmed === 'IP Address:' ||
           trimmed === 'Hostname:' ||
           trimmed === 'Priority:' ||
-          trimmed === 'Content:'
+          trimmed === 'Content:' ||
+          trimmed === 'Port:' ||
+          trimmed === 'Weight:'
         )
           return
         // add quotes if it's a txt record

@@ -1,7 +1,7 @@
 {
   "name": "Export CrazyDomains DNS",
   "description": "Easily export DNS records from CrazyDomains in a format ready to import to GoDaddy. *FreeParking has been rebranded to CrazyDomains in New Zealand.*",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "manifest_version": 3,
   "icons": {
     "16": "icons/icon16.png",
