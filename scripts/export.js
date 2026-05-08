@@ -136,35 +136,37 @@
     )
     // ieration through the records
     records.forEach((record) => {
-      const details = record.innerText.trim().split('\n')
-      if (details.length === 0) return
+      const cells = record.querySelectorAll('[class*="Table__Cell-"]')
+      if (cells.length < 3) return
 
       // first item is the record type
-      const type = details[0].trim().toUpperCase().replace(' RECORD', '')
+      const type = cells[0].innerText.trim().toUpperCase().replace(' RECORD', '')
       if (!type) return
 
       // second item is the host
-      let host = details[1] ? details[1].trim() : ''
+      let host = cells[1].innerText.trim()
       if (!host) return
 
       // get address values
       let address = ''
-      const values = details.slice(2)
-      if (!values) return
+      const values = cells[2].innerText
+        .trim()
+        .split('\n')
+        .map((value) => value.trim())
+        .filter(Boolean)
+      if (values.length === 0) return
       values.forEach((value) => {
-        const trimmed = value.trim()
         if (
-          !trimmed ||
-          trimmed === 'IP Address:' ||
-          trimmed === 'Hostname:' ||
-          trimmed === 'Priority:' ||
-          trimmed === 'Content:' ||
-          trimmed === 'Port:' ||
-          trimmed === 'Weight:'
+          value === 'IP Address:' ||
+          value === 'Hostname:' ||
+          value === 'Priority:' ||
+          value === 'Content:' ||
+          value === 'Port:' ||
+          value === 'Weight:'
         )
           return
         // add quotes if it's a txt record
-        address += type === 'TXT' ? `   "${trimmed}"` : `   ${trimmed}`
+        address += type === 'TXT' ? `   "${value}"` : `   ${value}`
       })
 
       if (type === 'CNAME' || type === 'MX' || type === 'SRV') {
