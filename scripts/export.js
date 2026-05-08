@@ -92,14 +92,19 @@
     const addRecordButton = Array.from(
       document.querySelectorAll('button')
     ).find((el) => el.innerText.trim().toLowerCase() === 'add record')
+    const dnsRecordsHeading = Array.from(document.querySelectorAll('h4')).find(
+      (el) => el.innerText.trim() === 'DNS Records'
+    )
     let classes = []
-    if (!addRecordButton) {
+    if (!addRecordButton && !dnsRecordsHeading) {
       console.log(
-        '[DNS Export] "Add Record" button not found, DNS table not available'
+        '[DNS Export] Neither "Add Record" button nor "DNS Records" heading found'
       )
       return
     }
-    classes = Array.from(addRecordButton.classList)
+    if (addRecordButton) {
+      classes = Array.from(addRecordButton.classList)
+    }
 
     // setup button with id downloadDnsRecords
     const button = document.createElement('button')
@@ -113,7 +118,12 @@
     })
 
     // add button
-    addRecordButton.parentNode.insertBefore(button, addRecordButton.nextSibling)
+    if (addRecordButton) {
+      addRecordButton.parentNode.insertBefore(button, addRecordButton.nextSibling)
+      return
+    }
+
+    dnsRecordsHeading.insertAdjacentElement('afterend', button)
   }
 
   // function to download the table as csv
