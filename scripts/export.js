@@ -126,79 +126,174 @@
     dnsRecordsHeading.insertAdjacentElement('afterend', button)
   }
 
+  // Column headers we know how to read. Matched case-insensitively against
+  // the table header text so the export survives columns being added/reordered.
+  const COLUMN_ALIASES = {
+    type: ['record name', 'record type', 'type'],
+    host: ['sub domain', 'subdomain', 'host', 'hostname', 'name'],
+    ttl: ['ttl'],
+    value: ['record information', 'record info', 'value', 'address', 'content']
+  }
+  // Used when no header row can be found (older UI)
+  const DEFAULT_COLUMNS = { type: 0, host: 1, value: 2 }
+
+  function cellsOf(row) {
+    let cells = row.querySelectorAll('[class*="Table__Cell-"]')
+    if (cells.length === 0) cells = row.querySelectorAll('[class*="Cell__CellEl-"]')
+    return Array.from(cells)
+  }
+
+  // Build { type, host, ttl, value } -> cell index from the header row
+  function detectColumns() {
+    const header = document.querySelector('[class*="TableRoot-"] [class*="Table__Header-"]')
+    if (!header) {
+      console.log('[DNS Export] No header row found, using default columns')
+      return { columns: { ...DEFAULT_COLUMNS }, headers: null }
+    }
+    const headers = cellsOf(header).map((c) => c.innerText.trim().toLowerCase())
+    const columns = {}
+    Object.entries(COLUMN_ALIASES).forEach(([key, aliases]) => {
+      const idx = headers.findIndex((h) => aliases.includes(h))
+      if (idx !== -1) columns[key] = idx
+    })
+    return { columns, headers }
+  }
+
+  // Sanity check the mapping against the first data row and let the user
+  // confirm before exporting if anything looks off.
+  function confirmColumns(columns, headers, firstRow) {
+    const problems = []
+    ;['type', 'host', 'value'].forEach((key) => {
+      if (columns[key] === undefined) problems.push(`Could not find the "${key}" column`)
+    })
+
+    if (problems.length === 0 && firstRow) {
+      const cells = cellsOf(firstRow)
+      const type = (cells[columns.type]?.innerText || '').trim()
+      const value = (cells[columns.value]?.innerText || '').trim()
+      if (!/^[A-Z]+( RECORD)?$/i.test(type))
+        problems.push(`Type column reads "${type}", expected e.g. "A Record"`)
+      if (/^\d+$/.test(value))
+        problems.push(`Value column reads "${value}", looks like a TTL not a record value`)
+    }
+
+    const summary = Object.entries(columns)
+      .map(([k, i]) => `${k} -> column ${i + 1}${headers ? ` (${headers[i]})` : ''}`)
+      .join('\n')
+    console.log('[DNS Export] Column mapping:\n' + summary)
+
+    if (problems.length === 0) return true
+    return confirm(
+      'DNS Export: the table layout may have changed.\n\n' +
+        problems.join('\n') +
+        '\n\nDetected columns:\n' +
+        (summary || '(none)') +
+        (headers ? '\n\nHeaders on page: ' + headers.join(' | ') : '') +
+        '\n\nExport anyway?'
+    )
+  }
+
+  // Work out the apex domain: the host with the fewest labels that every
+  // other host sits under (falls back to the shortest host).
+  function detectDomain(hosts) {
+    const clean = hosts.map((h) => h.replace(/\.$/, '')).filter(Boolean)
+    if (clean.length === 0) return ''
+    const sorted = [...clean].sort(
+      (a, b) => a.split('.').length - b.split('.').length || a.length - b.length
+    )
+    const apex = sorted.find((cand) =>
+      clean.every((h) => h === cand || h.endsWith('.' + cand))
+    )
+    return apex || sorted[0]
+  }
+
+  function relativeHost(host, domain) {
+    if (!domain) return host
+    if (host === domain) return '@'
+    if (host.endsWith('.' + domain)) return host.slice(0, -(domain.length + 1))
+    return host
+  }
+
   // function to download the table as csv
   function downloadTableAsCsv() {
-    let output = ''
-    let firstA = true
-    let domain = ''
-    const records = document.querySelectorAll(
-      '[class*="TableRoot-"] [class*="Table__Row-"]'
+    const records = Array.from(
+      document.querySelectorAll('[class*="TableRoot-"] [class*="Table__Row-"]')
     )
-    // ieration through the records
+
+    const { columns, headers } = detectColumns()
+    if (!confirmColumns(columns, headers, records[0])) return
+    if (['type', 'host', 'value'].some((k) => columns[k] === undefined)) {
+      alert('DNS Export: cannot export without type, host and value columns.')
+      return
+    }
+
+    const domain = detectDomain(
+      records
+        .map((r) => cellsOf(r)[columns.host])
+        .filter(Boolean)
+        .map((c) => c.innerText.trim())
+    )
+    let output = domain ? `$ORIGIN ${domain}.\n` : ''
+
+    // The page groups records by type and only labels the first row of
+    // each group, so carry the last seen type forward.
+    let lastType = ''
     records.forEach((record) => {
-      const cells = record.querySelectorAll('[class*="Table__Cell-"]')
-      if (cells.length < 3) return
+      const cells = cellsOf(record)
+      if (cells.length <= columns.value) return
 
-      // first item is the record type
-      const type = cells[0].innerText.trim().toUpperCase().replace(' RECORD', '')
+      let type = cells[columns.type].innerText.trim().toUpperCase().replace(' RECORD', '')
+      if (!type) type = lastType
       if (!type) return
+      lastType = type
 
-      // second item is the host
-      let host = cells[1].innerText.trim()
+      const host = cells[columns.host].innerText.trim()
       if (!host) return
+
+      // use the page's TTL when present, otherwise default to 3600
+      let ttl = 3600
+      if (columns.ttl !== undefined && cells[columns.ttl]) {
+        const t = parseInt(cells[columns.ttl].innerText.trim(), 10)
+        if (!isNaN(t) && t > 0) ttl = t
+      }
 
       // get address values
       let address = ''
-      const values = cells[2].innerText
+      const values = cells[columns.value].innerText
         .trim()
         .split('\n')
         .map((value) => value.trim())
         .filter(Boolean)
       if (values.length === 0) return
       values.forEach((value) => {
-        if (
-          value === 'IP Address:' ||
-          value === 'Hostname:' ||
-          value === 'Priority:' ||
-          value === 'Content:' ||
-          value === 'Port:' ||
-          value === 'Weight:'
-        )
-          return
-        // add quotes if it's a txt record
-        address += type === 'TXT' ? `   "${value}"` : `   ${value}`
+        // skip labels like "IP Address:", "Hostname:", "Priority:", etc.
+        if (value.endsWith(':')) return
+        // quote (and escape) txt record values
+        address +=
+          type === 'TXT' ? `   "${value.replace(/"/g, '\\"')}"` : `   ${value}`
       })
 
-      if (type === 'CNAME' || type === 'MX' || type === 'SRV') {
+      // hostname targets must be fully qualified
+      if (
+        (type === 'CNAME' || type === 'MX' || type === 'SRV' || type === 'NS') &&
+        !address.endsWith('.')
+      ) {
         address += '.'
       }
 
-      if (type === 'A' && firstA) {
-        domain = host
-        firstA = false
-        output += `$ORIGIN ${domain}.\n`
-      }
-
-      // replace .domain.com with ''
-      if (type !== 'SRV') host = host.replace(`.${domain}`, '')
-      // replace domain.com with @
-      host = host.replace(domain, '@')
-
-      // add output
-      output += `${host}   3600  IN   ${type}${address}\n`
+      output += `${relativeHost(host, domain)}   ${ttl}  IN   ${type}${address}\n`
     })
     console.log(output)
 
     const link = document.createElement('a')
-    link.setAttribute('download', `${domain}.crazydomains.txt`)
-    link.append('Download!')
+    link.setAttribute('download', `${domain || 'dns'}.crazydomains.txt`)
     link.setAttribute(
       'href',
-      'data:text/plain;charset=UTF-8,' + encodeURI(output)
+      'data:text/plain;charset=UTF-8,' + encodeURIComponent(output)
     )
-
     document.body.appendChild(link)
     link.click()
+    link.remove()
   }
 
   // Initialize when DOM is ready
